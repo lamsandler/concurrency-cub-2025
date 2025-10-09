@@ -10,30 +10,33 @@ open class TreiberStackWithElimination<E> : Stack<E> {
     // TODO: synchronizing them in an `eliminationArray` cell.
     private val eliminationArray = AtomicReferenceArray<Any?>(ELIMINATION_ARRAY_SIZE)
 
+
     override fun push(element: E) {
         if (tryPushElimination(element)) return
         stack.push(element)
     }
 
     protected open fun tryPushElimination(element: E): Boolean {
-        TODO("Implement me!")
-        // TODO: Choose a random cell in `eliminationArray`
-        // TODO: and try to install the element there.
-        // TODO: Wait `ELIMINATION_WAIT_CYCLES` loop cycles
-        // TODO: in hope that a concurrent `pop()` grabs the
-        // TODO: element. If so, clean the cell and finish,
-        // TODO: returning `true`. Otherwise, move the cell
-        // TODO: to the empty state and return `false`.
+        val cellIndex = randomCellIndex()
+        if(!eliminationArray.compareAndSet(cellIndex, CELL_STATE_EMPTY, element)) return false
+
+        repeat(ELIMINATION_WAIT_CYCLES) {
+            if(eliminationArray.compareAndSet(cellIndex, CELL_STATE_RETRIEVED, CELL_STATE_EMPTY)) return true
+        }
+        if(eliminationArray.compareAndSet(cellIndex, element, CELL_STATE_EMPTY)) return false
+
+        eliminationArray.set(cellIndex, CELL_STATE_EMPTY)
+        return true
     }
 
     override fun pop(): E? = tryPopElimination() ?: stack.pop()
 
     private fun tryPopElimination(): E? {
-        TODO("Implement me!")
-        // TODO: Choose a random cell in `eliminationArray`
-        // TODO: and try to retrieve an element from there.
-        // TODO: On success, return the element.
-        // TODO: Otherwise, if the cell is empty, return `null`.
+        val cellIndex = randomCellIndex()
+        val currentValue = eliminationArray.get(cellIndex)
+        if(currentValue == CELL_STATE_RETRIEVED || currentValue == CELL_STATE_EMPTY) return null
+        if(eliminationArray.compareAndSet(cellIndex, currentValue, CELL_STATE_RETRIEVED)) return currentValue as E
+        return null
     }
 
     private fun randomCellIndex(): Int =
